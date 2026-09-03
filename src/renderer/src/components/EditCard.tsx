@@ -29,10 +29,12 @@ export default function EditCard({ edit, onOpen }: Props): JSX.Element {
       </div>
       <div className="title">{edit.title}</div>
       <div className="moodline">
-        {edit.moods.length === 0 ? (
+        {edit.moods.length > 0 ? (
+          edit.moods.map((m) => <b key={m}>{MOOD_BY_KEY.get(m)?.label ?? m}</b>)
+        ) : Object.keys(edit.moodScores).length === 0 ? (
           <span>UNREAD</span>
         ) : (
-          edit.moods.map((m) => <b key={m}>{MOOD_BY_KEY.get(m)?.label ?? m}</b>)
+          <span>NO STRONG MOOD</span>
         )}
       </div>
     </button>

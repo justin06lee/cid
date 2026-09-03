@@ -31,6 +31,22 @@ function lexicalScore(queryTokens: string[], edit: Edit): number {
   return hits / queryTokens.length
 }
 
+/**
+ * Below this top score, treat the query as having matched nothing at all.
+ *
+ * Calibrated, not guessed. Against a fixture library, real queries ("i need to
+ * lock in", "sad goodbye", "villain arc energy") scored 0.21–0.61, while
+ * nonsense and off-topic queries ("asdfgh qwerty", "the quarterly tax filing
+ * deadline") topped out at 0.16 — so the two separate cleanly here. A z-score
+ * or best-to-median ratio was tried first and neither separated them at all:
+ * an off-topic query still has one edit that happens to be least unlike it.
+ */
+const MIN_TOP_SCORE = 0.18
+/** Keep results within this fraction of the best score... */
+const RELATIVE_FLOOR = 0.35
+/** ...but never anything this weak, however bad the rest of the field is. */
+const ABSOLUTE_FLOOR = 0.08
+
 export interface RankOptions {
   query: string
   queryVector: Float32Array | null
@@ -77,11 +93,15 @@ export function rank(
     return { edit, score: 0.7 * semantic + 0.3 * lexical + moodBoost }
   })
 
-  return ranked
-    // Below this the results are noise, and showing the whole library for a
-    // typo is worse than showing nothing.
-    .filter((r) => r.score > 0.06)
-    .sort((a, b) => b.score - a.score)
+  // Two-stage cutoff. Cosine never returns zero, so a nonsense query still
+  // produces a ranking of pure noise — if even the best match is weak, the
+  // honest answer is that nothing matched. Past that bar, results are kept
+  // relative to the winner, since how far the field trails the top hit says
+  // more than any absolute number.
+  const best = ranked.reduce((m, r) => Math.max(m, r.score), 0)
+  if (best < MIN_TOP_SCORE) return []
+  const floor = Math.max(ABSOLUTE_FLOOR, best * RELATIVE_FLOOR)
+  return ranked.filter((r) => r.score >= floor).sort((a, b) => b.score - a.score)
 }
 
 const DAY = 86_400_000

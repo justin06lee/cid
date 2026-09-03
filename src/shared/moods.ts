@@ -81,6 +81,6 @@ export const MOOD_BY_KEY = new Map(MOOD_AXES.map((m) => [m.key, m]))
  * Bump when MOOD_AXES blurbs or the embedding model change — stored vectors and
  * mood scores are re-derived on next launch when this doesn't match what's on disk.
  */
-export const LIBRARY_EMBED_VERSION = 1
+export const LIBRARY_EMBED_VERSION = 2
 
 export const EMBED_MODEL = 'Xenova/all-MiniLM-L6-v2'

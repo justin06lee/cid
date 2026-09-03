@@ -1,28 +1,53 @@
 import { protocol } from 'electron'
 import { createReadStream, statSync, existsSync } from 'node:fs'
 import { Readable } from 'node:stream'
-import { join, basename, extname } from 'node:path'
+import { join, basename, extname, normalize } from 'node:path'
 import { mediaDir, thumbsDir } from './paths.js'
 
 /**
- * Media is served over a custom `cid://` scheme rather than file://, because the
- * renderer is a localhost/file page and Chromium blocks it from reading arbitrary
- * file:// URLs. Registering our own scheme also lets us implement Range properly,
- * which `net.fetch(file://)` does not — without it, <video> can play but not seek.
+ * Everything the renderer loads comes over a custom `cid://` scheme:
  *
- *   cid://media/<filename>
- *   cid://thumb/<filename>
+ *   cid://app/index.html   the packaged renderer
+ *   cid://media/<file>     a video from the library
+ *   cid://thumb/<file>     its poster frame
+ *
+ * The app page is served from here rather than file:// for a specific reason:
+ * onnxruntime-web boots by wrapping its wasm glue in a Blob and import()ing the
+ * blob: URL, and a file:// page has an opaque origin that cannot import modules.
+ * Under cid://app the page has a real origin and the embedder loads.
+ *
+ * Media needs its own scheme regardless: Chromium won't let the page read
+ * arbitrary file:// URLs, and `net.fetch(file://)` ignores Range, so <video>
+ * could play but never seek.
  */
 export function registerCidScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: 'cid',
-      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true }
+      // No bypassCSP: the page's own Content-Security-Policy should still apply
+      // to everything it loads, including our media.
+      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
     }
   ])
 }
 
+/** Where the built renderer lives; set by main before the first load. */
+let rendererDir: string | null = null
+
+export function serveRendererFrom(dir: string): void {
+  rendererDir = dir
+}
+
 const MIME: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
+  '.wasm': 'application/wasm',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.map': 'application/json',
+  '.woff2': 'font/woff2',
   '.mp4': 'video/mp4',
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
@@ -37,13 +62,27 @@ const MIME: Record<string, string> = {
 export function handleCidProtocol(): void {
   protocol.handle('cid', async (request) => {
     const url = new URL(request.url)
-    const root = url.host === 'thumb' ? thumbsDir : url.host === 'media' ? mediaDir : null
-    if (!root) return new Response('unknown cid host', { status: 404 })
+    const decoded = decodeURIComponent(url.pathname)
 
-    // basename() collapses any ../ before it can escape the library dir.
-    const name = basename(decodeURIComponent(url.pathname))
-    const path = join(root, name)
-    if (!name || !existsSync(path)) return new Response('not found', { status: 404 })
+    let path: string
+    if (url.host === 'app') {
+      if (!rendererDir) return new Response('renderer not mounted', { status: 500 })
+      // The renderer has nested asset paths, so normalize the whole path and
+      // then verify it stayed inside the bundle.
+      const target = normalize(join(rendererDir, decoded === '/' ? '/index.html' : decoded))
+      if (!target.startsWith(rendererDir)) return new Response('forbidden', { status: 403 })
+      path = target
+    } else {
+      const root = url.host === 'thumb' ? thumbsDir : url.host === 'media' ? mediaDir : null
+      if (!root) return new Response('unknown cid host', { status: 404 })
+      // basename() collapses any ../ before it can escape the library dir.
+      const name = basename(decoded)
+      if (!name) return new Response('not found', { status: 404 })
+      path = join(root, name)
+    }
+
+    if (!existsSync(path)) return new Response('not found', { status: 404 })
+    const name = basename(path)
 
     const size = statSync(path).size
     const type = MIME[extname(name).toLowerCase()] ?? 'application/octet-stream'

@@ -20,7 +20,9 @@ export function loadModel(onStatus: (s: ModelStatus) => void): Promise<FeatureEx
 
   const fileProgress = new Map<string, number>()
   extractorPromise = pipeline('feature-extraction', EMBED_MODEL, {
-    dtype: 'fp32',
+    // q8 weights are ~4x smaller to download and the ranking difference on
+    // short titles is not perceptible.
+    dtype: 'q8',
     progress_callback: (p: { status: string; file?: string; progress?: number }) => {
       if (p.status === 'progress' && p.file) {
         fileProgress.set(p.file, p.progress ?? 0)
@@ -38,6 +40,7 @@ export function loadModel(onStatus: (s: ModelStatus) => void): Promise<FeatureEx
     })
     .catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err)
+      console.error('[cid] embedding model failed to load', err)
       onStatus({ state: 'error', message })
       // Let a later call retry rather than caching the rejection forever.
       extractorPromise = null
@@ -84,12 +87,23 @@ export interface MoodProfile {
 }
 
 /**
+ * Anything whose best axis falls below this isn't really about any of them.
+ *
+ * Genuine edits land at 0.35–0.57 on their top axis with daylight to the runner
+ * up; a video that isn't an edit at all scored a flat 0.23/0.21/0.20 across the
+ * board — no axis fits, so the ranking is just noise. Rather than stamp three
+ * arbitrary chips on it, leave it unplaced. Changing this needs a
+ * LIBRARY_EMBED_VERSION bump, since moods are computed once at embed time.
+ */
+const MIN_MOOD_SCORE = 0.28
+
+/**
  * Score an edit's vector against every mood axis.
  *
- * The cut is relative rather than absolute: raw cosine between a short edit
- * title and a long mood blurb sits in a narrow band, so a fixed threshold either
- * tags everything or nothing. Taking the top axis plus anything within 85% of it
- * gives each edit one to three chips that actually distinguish it.
+ * Past that floor the cut is relative rather than absolute: raw cosine between a
+ * short edit title and a long mood blurb sits in a narrow band, so a fixed
+ * threshold either tags everything or nothing. Taking the top axis plus anything
+ * within 85% of it gives one to three chips that actually distinguish an edit.
  */
 export async function moodProfile(vec: Float32Array): Promise<MoodProfile> {
   const axes = await getAxisVectors()
@@ -97,11 +111,15 @@ export async function moodProfile(vec: Float32Array): Promise<MoodProfile> {
     (a, b) => b.score - a.score
   )
   const best = scored[0]?.score ?? 0
-  const moods = scored
-    .filter((s, i) => i === 0 || s.score >= best * 0.85)
-    .slice(0, 3)
-    .map((s) => s.key)
+  const moods =
+    best < MIN_MOOD_SCORE
+      ? []
+      : scored
+          .filter((s, i) => i === 0 || s.score >= best * 0.85)
+          .slice(0, 3)
+          .map((s) => s.key)
   const scores: Record<string, number> = {}
   for (const s of scored) scores[s.key] = Number(s.score.toFixed(4))
   return { moods, scores }
 }
+

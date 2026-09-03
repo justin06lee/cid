@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import type { Edit, IngestProgress } from '@shared/types'
 import { MOOD_AXES } from '@shared/moods'
 import { vibeCard } from '@shared/vibe'
+import { expandQuery } from '@shared/slang'
 import { embed, embedOne, loadModel, moodProfile, type ModelStatus } from './embed'
 import { rank, hitMe } from './search'
 import EditCard from './components/EditCard'
@@ -108,9 +109,11 @@ export default function App(): JSX.Element {
     }
     const timer = setTimeout(() => {
       setSettledQuery(q)
-      // Lexical matching already ran on this query; the vector just upgrades the
-      // same result set when it lands, so a slow embed never blocks typing.
-      embedOne(q).then(setQueryVector).catch(() => setQueryVector(null))
+      // Lexical matching already ran on the raw query; the vector just upgrades
+      // the same result set when it lands, so a slow embed never blocks typing.
+      // Only the embedded copy gets slang glosses — the lexical half still
+      // matches on exactly what was typed.
+      embedOne(expandQuery(q)).then(setQueryVector).catch(() => setQueryVector(null))
     }, 180)
     return () => clearTimeout(timer)
   }, [query])
@@ -301,14 +304,16 @@ export default function App(): JSX.Element {
 
   const statusText =
     modelStatus.state === 'error'
-      ? `offline — lexical search only`
+      ? 'offline — lexical search only'
       : modelStatus.state === 'loading'
         ? `${modelStatus.label} ${Math.round(modelStatus.percent * 100)}%`
-        : ingesting > 0
-          ? `downloading ${ingesting}`
-          : backlog > 0
-            ? `reading ${backlog} edit${backlog === 1 ? '' : 's'}`
-            : 'ready'
+        : modelStatus.state === 'idle'
+          ? 'warming up'
+          : ingesting > 0
+            ? `downloading ${ingesting}`
+            : backlog > 0
+              ? `reading ${backlog} edit${backlog === 1 ? '' : 's'}`
+              : 'ready'
 
   return (
     <div className="app">
@@ -396,7 +401,10 @@ export default function App(): JSX.Element {
       </main>
 
       <footer className="statusbar">
-        <span className="seg">
+        <span
+          className="seg"
+          title={modelStatus.state === 'error' ? modelStatus.message : undefined}
+        >
           <i className={`dot ${statusDot}`} />
           {statusText}
         </span>

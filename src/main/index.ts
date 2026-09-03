@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from 'electro
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AddResult, EditPatch, IngestProgress } from '../shared/types.js'
-import { registerCidScheme, handleCidProtocol } from './protocol.js'
+import { registerCidScheme, handleCidProtocol, serveRendererFrom } from './protocol.js'
 import { addFromUrl, addFromFile, sweepPartials } from './ingest.js'
 import { resolveBin } from './bin.js'
 import { libraryRoot, mediaDir } from './paths.js'
@@ -48,7 +48,9 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
-    win.loadFile(join(dirname, '../renderer/index.html'))
+    // Not loadFile: a file:// page has an opaque origin, and onnxruntime-web
+    // boots by import()ing a blob: module, which opaque origins can't do.
+    win.loadURL('cid://app/index.html')
   }
 }
 
@@ -140,6 +142,7 @@ function registerIpc(): void {
 nativeTheme.themeSource = 'dark'
 
 app.whenReady().then(() => {
+  serveRendererFrom(join(dirname, '../renderer'))
   handleCidProtocol()
   loadLibrary()
   sweepPartials()

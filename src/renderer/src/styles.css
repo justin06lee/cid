@@ -61,7 +61,8 @@ input { font-family: inherit; color: inherit; }
 .masthead {
   position: relative;
   z-index: 2;
-  padding: 44px 40px 18px;
+  /* clears the inset traffic lights, which sit at y=20 */
+  padding: 62px 40px 18px;
   -webkit-app-region: drag;
   flex-shrink: 0;
 }
@@ -258,8 +259,9 @@ input { font-family: inherit; color: inherit; }
 /* ── empty state ─────────────────────────────────────────────────────── */
 
 .empty {
-  display: grid; place-items: center;
-  min-height: 320px; text-align: center; gap: 6px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 340px; text-align: center; gap: 12px;
 }
 .empty .big {
   font-family: var(--mono); font-size: 12px;

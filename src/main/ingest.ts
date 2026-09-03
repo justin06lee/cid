@@ -63,6 +63,82 @@ function run(
   })
 }
 
+/**
+ * YouTube rotates which internal player clients it will serve media to, and the
+ * one yt-dlp picks by default periodically starts answering 403 mid-download —
+ * as it did while this was being written, where the default resolved formats
+ * fine and then refused the actual bytes, while `mweb` worked. Pinning a single
+ * client would just move the breakage, so each attempt is tried in turn and the
+ * first that works is reused for the rest of the ingest.
+ */
+const PLAYER_CLIENTS: string[][] = [
+  [], // whatever yt-dlp thinks is best today
+  ['--extractor-args', 'youtube:player_client=mweb'],
+  ['--extractor-args', 'youtube:player_client=web_embedded,tv_embedded'],
+  ['--extractor-args', 'youtube:player_client=web_safari,ios,tv']
+]
+
+/**
+ * Retrying only helps when the failure is YouTube gatekeeping. A deleted or
+ * private video fails identically on every client, so don't spend four round
+ * trips discovering that.
+ */
+function looksGateKept(stderr: string): boolean {
+  return /403|forbidden|no video formats|needs to be reloaded|sign in to confirm|failed to extract|player response|throttl/i.test(
+    stderr
+  )
+}
+
+/**
+ * Escape hatch for the cases no player client fixes — age-gated or
+ * login-walled videos. `CID_COOKIES_FROM_BROWSER=chrome` (or firefox, safari,
+ * brave…) lends yt-dlp your existing session.
+ */
+function userArgs(): string[] {
+  const out: string[] = []
+  const browser = process.env.CID_COOKIES_FROM_BROWSER?.trim()
+  if (browser) out.push('--cookies-from-browser', browser)
+  const extra = process.env.CID_YTDLP_ARGS?.trim()
+  if (extra) out.push(...extra.split(/\s+/))
+  return out
+}
+
+interface Attempt {
+  result: { code: number; stdout: string; stderr: string }
+  /** The client flags that worked, so the download can skip straight to them. */
+  variant: string[]
+}
+
+async function runYtdlp(
+  bin: string,
+  args: string[],
+  preferred: string[] | null,
+  onLine?: (line: string, stream: 'out' | 'err') => void
+): Promise<Attempt> {
+  const ladder = preferred
+    ? [preferred, ...PLAYER_CLIENTS.filter((v) => v.join() !== preferred.join())]
+    : PLAYER_CLIENTS
+
+  let last: Attempt | null = null
+  for (const variant of ladder) {
+    const result = await run(bin, [...args, ...variant, ...userArgs()], onLine)
+    if (result.code === 0) return { result, variant }
+    last = { result, variant }
+    if (!looksGateKept(result.stderr)) break
+  }
+  return last!
+}
+
+function ytdlpError(stderr: string, fallback: string): Error {
+  const line = stderr.split('\n').filter(Boolean).pop() || fallback
+  if (/sign in to confirm|age|private|login|cookies/i.test(stderr)) {
+    return new Error(
+      `${line} — try relaunching with CID_COOKIES_FROM_BROWSER=chrome (or firefox/safari/brave)`
+    )
+  }
+  return new Error(line)
+}
+
 /** Keep ids safe as filenames and as cid:// path segments. */
 function slugId(raw: string): string {
   const clean = raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48)
@@ -143,14 +219,14 @@ export async function addFromUrl(url: string, report: Report): Promise<Edit> {
   const ytdlp = requireBin('yt-dlp')
 
   report({ stage: 'resolving', percent: null, message: 'reading the page…' })
-  const probe = await run(ytdlp, ['-J', '--no-playlist', '--no-warnings', url])
-  if (probe.code !== 0) {
-    throw new Error(probe.stderr.split('\n').filter(Boolean).pop() || 'yt-dlp could not read that URL')
+  const probe = await runYtdlp(ytdlp, ['-J', '--no-playlist', '--no-warnings', url], null)
+  if (probe.result.code !== 0) {
+    throw ytdlpError(probe.result.stderr, 'yt-dlp could not read that URL')
   }
 
   let info: ProbeInfo
   try {
-    info = JSON.parse(probe.stdout) as ProbeInfo
+    info = JSON.parse(probe.result.stdout) as ProbeInfo
   } catch {
     throw new Error('yt-dlp returned something that was not video metadata')
   }
@@ -159,7 +235,7 @@ export async function addFromUrl(url: string, report: Report): Promise<Edit> {
   if (hasEdit(id)) throw new Error('already in your library')
 
   report({ stage: 'downloading', percent: 0, message: info.title ?? 'downloading…' })
-  const dl = await run(
+  const dl = await runYtdlp(
     ytdlp,
     [
       '--no-playlist',
@@ -173,6 +249,7 @@ export async function addFromUrl(url: string, report: Report): Promise<Edit> {
       '-o', join(mediaDir, `${id}.%(ext)s`),
       url
     ],
+    probe.variant,
     (line) => {
       const m = /\[download\]\s+([\d.]+)%/.exec(line)
       if (m) {
@@ -182,8 +259,8 @@ export async function addFromUrl(url: string, report: Report): Promise<Edit> {
       }
     }
   )
-  if (dl.code !== 0) {
-    throw new Error(dl.stderr.split('\n').filter(Boolean).pop() || 'download failed')
+  if (dl.result.code !== 0) {
+    throw ytdlpError(dl.result.stderr, 'download failed')
   }
 
   const file = findMediaFile(mediaDir, id)
