@@ -1,0 +1,27 @@
+# deps
+node_modules/
+
+# build output
+out/
+dist/
+release/
+*.tsbuildinfo
+
+# local library data (your edits live in ~/cid, never in the repo)
+library/
+*.mp4
+*.webm
+*.mkv
+*.jpg
+*.png
+!assets/**
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# os / editor junk
+.DS_Store
+.vscode/
+.idea/
