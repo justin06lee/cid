@@ -34,14 +34,23 @@ function lexicalScore(queryTokens: string[], edit: Edit): number {
 /**
  * Below this top score, treat the query as having matched nothing at all.
  *
- * Calibrated, not guessed. Against a fixture library, real queries ("i need to
- * lock in", "sad goodbye", "villain arc energy") scored 0.21–0.61, while
- * nonsense and off-topic queries ("asdfgh qwerty", "the quarterly tax filing
- * deadline") topped out at 0.16 — so the two separate cleanly here. A z-score
- * or best-to-median ratio was tried first and neither separated them at all:
- * an off-topic query still has one edit that happens to be least unlike it.
+ * Calibrated against a fixture library, and the honest finding is that the two
+ * classes barely separate. Sorted by score, real queries bottom out at 0.153
+ * ("someone dying") and off-topic ones top out at 0.151 ("the quarterly tax
+ * filing deadline") — they touch. Short queries are the problem: a one or two
+ * word query scores systematically lower than a sentence, so any bar high enough
+ * to reject nonsense also rejects "revenge" and "sad".
+ *
+ * So this is a choice about which error to make, not a clean split. Hiding an
+ * edit the user actually asked for is much worse than showing three weak results
+ * for a typo, so the bar sits just under the weakest real query. Nonsense that
+ * scores near the top of its range gets through; everything genuinely unrelated
+ * (0.05-0.13) still does not.
+ *
+ * A z-score and a best-to-median ratio were both tried and neither separated the
+ * classes at all — an off-topic query still has one edit that is least unlike it.
  */
-const MIN_TOP_SCORE = 0.18
+const MIN_TOP_SCORE = 0.14
 /** Keep results within this fraction of the best score... */
 const RELATIVE_FLOOR = 0.35
 /** ...but never anything this weak, however bad the rest of the field is. */

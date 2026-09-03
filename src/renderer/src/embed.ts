@@ -1,4 +1,8 @@
 import { pipeline, env, type FeatureExtractionPipeline } from '@huggingface/transformers'
+// Reached by path rather than by package name on purpose: onnxruntime-web's
+// exports map does not expose ./dist, so the bare specifier is unresolvable.
+import ortWasm from '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm?url'
+import ortMjs from '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs?url'
 import { EMBED_MODEL, MOOD_AXES } from '@shared/moods'
 
 // The renderer is Chromium, so run onnxruntime-web. Weights come from the HF CDN
@@ -6,6 +10,14 @@ import { EMBED_MODEL, MOOD_AXES } from '@shared/moods'
 // network exactly once, and works offline forever after.
 env.allowLocalModels = false
 env.useBrowserCache = true
+
+// Left alone, onnxruntime fetches its ~23MB runtime from jsDelivr on every cold
+// cache. Vite already emits that exact file into the bundle, so point ort at the
+// local copy: same download size on disk, one less thing that can be offline.
+// `runtimeFellBack` records if we ever have to undo this.
+const ortWasmEnv = env.backends.onnx.wasm!
+ortWasmEnv.wasmPaths = { wasm: ortWasm, mjs: ortMjs }
+let runtimeFellBack = false
 
 export type ModelStatus =
   | { state: 'idle' }
@@ -39,11 +51,22 @@ export function loadModel(onStatus: (s: ModelStatus) => void): Promise<FeatureEx
       return ex as FeatureExtractionPipeline
     })
     .catch((err: unknown) => {
+      // Let a later call retry rather than caching the rejection forever.
+      extractorPromise = null
+
+      // The bundled runtime is one specific ort build. If transformers ever asks
+      // for a different one, the local override is the thing that broke it — drop
+      // it and let ort fetch the variant it actually wants.
+      if (!runtimeFellBack) {
+        runtimeFellBack = true
+        console.warn('[cid] bundled onnx runtime rejected, falling back to the CDN', err)
+        ortWasmEnv.wasmPaths = undefined
+        return loadModel(onStatus)
+      }
+
       const message = err instanceof Error ? err.message : String(err)
       console.error('[cid] embedding model failed to load', err)
       onStatus({ state: 'error', message })
-      // Let a later call retry rather than caching the rejection forever.
-      extractorPromise = null
       throw err
     })
 

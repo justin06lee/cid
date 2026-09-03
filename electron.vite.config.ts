@@ -19,6 +19,9 @@ export default defineConfig({
       conditions: ['browser', 'import', 'module', 'default'],
       alias: { '@shared': resolve('src/shared') }
     },
+    // The renderer root is src/renderer, but the onnx runtime it bundles lives in
+    // the repo's node_modules, one level above it.
+    server: { fs: { allow: [resolve('.')] } },
     build: {
       target: 'chrome130',
       rollupOptions: { input: { index: resolve('src/renderer/index.html') } }

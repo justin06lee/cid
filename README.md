@@ -80,8 +80,9 @@ That builds cid, installs it to `/Applications`, and launches it. Running `make`
 is safe. `make update` does the same to an already-running copy: quits it, removes it,
 rebuilds, reinstalls, relaunches. `make dev` runs it from source with hot reload.
 
-First launch downloads the embedding model once (~25MB, from Hugging Face). After that
-cid never needs the network except to fetch videos.
+First launch downloads the embedding model once (~25MB, from Hugging Face) and keeps it
+in the app's cache. The inference runtime ships inside the app rather than being fetched
+from a CDN, so after that first download cid needs the network only to fetch videos.
 
 ## Using it
 
