@@ -1,0 +1,74 @@
+<!--
+  cid — original vector art.
+
+  Two crimson slits open in the dark above a scrub bar, playhead just off the
+  start. The eyes are the Eminence in Shadow register the project is named for,
+  tilted into the angry "V" the show uses; the scrubber is what the app
+  actually is. Together: something watching from the dark, about to play.
+
+  The wordmark is drawn as paths, never <text>, so it renders identically
+  wherever the README is read. The crimson "i" matches the app's masthead.
+
+  Aspect ratio 8:5, rolled with jot -r 2 3 9.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400"
+     role="img" aria-label="cid">
+  <defs>
+    <radialGradient id="bleed" cx="0.27" cy="0.46" r="0.6">
+      <stop offset="0"    stop-color="#E0213C" stop-opacity="0.26"/>
+      <stop offset="0.55" stop-color="#E0213C" stop-opacity="0.06"/>
+      <stop offset="1"    stop-color="#E0213C" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="irisL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7E0A1C"/>
+      <stop offset="0.5" stop-color="#E0213C"/>
+      <stop offset="1" stop-color="#FF7181"/>
+    </linearGradient>
+    <linearGradient id="irisR" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#7E0A1C"/>
+      <stop offset="0.5" stop-color="#E0213C"/>
+      <stop offset="1" stop-color="#FF7181"/>
+    </linearGradient>
+
+    <!-- tight enough that the slits stay slits rather than smudges -->
+    <filter id="burn" x="-60%" y="-160%" width="220%" height="420%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="640" height="400" fill="#08080B"/>
+  <rect width="640" height="400" fill="url(#bleed)"/>
+
+  <!-- the eyes: outer corners high, inner corners low -->
+  <g filter="url(#burn)">
+    <path d="M 64 168 Q 120.4 153.2 160 196 Q 103.6 210.8 64 168 Z" fill="url(#irisL)"/>
+    <path d="M 188 196 Q 227.6 153.2 284 168 Q 244.4 210.8 188 196 Z" fill="url(#irisR)"/>
+  </g>
+
+  <!-- frame ticks, then the scrub bar -->
+  <g fill="#1E1E29">
+    <rect x="64"  y="256" width="2" height="8"/>
+    <rect x="108" y="256" width="2" height="8"/>
+    <rect x="152" y="256" width="2" height="8"/>
+    <rect x="196" y="256" width="2" height="8"/>
+    <rect x="240" y="256" width="2" height="8"/>
+    <rect x="282" y="256" width="2" height="8"/>
+  </g>
+  <rect x="64" y="275" width="220" height="3" fill="#23232F"/>
+  <rect x="64" y="275" width="72"  height="3" fill="#E0213C"/>
+  <rect x="133" y="267" width="7" height="19" fill="#FF2F4A"/>
+
+  <!-- wordmark: c i d. Bowls r=38 on a 76px x-height, stems to the ascender. -->
+  <g fill="none" stroke-linecap="round" stroke-width="15">
+    <!-- c: bowl open to the right, a 100-degree mouth -->
+    <path d="M 454.4 170.9 A 38 38 0 1 0 454.4 229.1" stroke="#E8E8EF"/>
+    <!-- i: crimson, matching the masthead -->
+    <path d="M 492 162 L 492 238" stroke="#E0213C"/>
+    <!-- d: bowl plus a stem running the full ascender -->
+    <circle cx="552" cy="200" r="38" stroke="#E8E8EF"/>
+    <path d="M 590 124 L 590 238" stroke="#E8E8EF"/>
+  </g>
+  <circle cx="492" cy="136" r="8" fill="#E0213C"/>
+</svg>

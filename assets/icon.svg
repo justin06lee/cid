@@ -1,0 +1,45 @@
+<!--
+  cid app icon — original vector art, the banner's mark without the wordmark.
+
+  Authored at 1024x1024 on the macOS icon grid (824x824 body, 100px margin) so
+  electron-builder only ever downscales. Two slits and nothing else, because at
+  32px in the Dock that is all that survives.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"
+     role="img" aria-label="cid">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#15111A"/>
+      <stop offset="1" stop-color="#050508"/>
+    </linearGradient>
+    <radialGradient id="bleed" cx="0.5" cy="0.5" r="0.55">
+      <stop offset="0"    stop-color="#E0213C" stop-opacity="0.34"/>
+      <stop offset="0.55" stop-color="#E0213C" stop-opacity="0.08"/>
+      <stop offset="1"    stop-color="#E0213C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="irisL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7E0A1C"/>
+      <stop offset="0.5" stop-color="#E0213C"/>
+      <stop offset="1" stop-color="#FF7181"/>
+    </linearGradient>
+    <linearGradient id="irisR" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#7E0A1C"/>
+      <stop offset="0.5" stop-color="#E0213C"/>
+      <stop offset="1" stop-color="#FF7181"/>
+    </linearGradient>
+    <filter id="burn" x="-60%" y="-160%" width="220%" height="420%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="body"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#body)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#tile)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#bleed)"/>
+    <g transform="translate(512 512) scale(2.6) translate(-174 -182)" filter="url(#burn)">
+      <path d="M 64 168 Q 120.4 153.2 160 196 Q 103.6 210.8 64 168 Z" fill="url(#irisL)"/>
+      <path d="M 188 196 Q 227.6 153.2 284 168 Q 244.4 210.8 188 196 Z" fill="url(#irisR)"/>
+    </g>
+  </g>
+</svg>

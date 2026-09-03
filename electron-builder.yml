@@ -1,0 +1,22 @@
+appId: com.justin06lee.cid
+productName: cid
+copyright: cid
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+
+mac:
+  category: public.app-category.entertainment
+  icon: build/icon.png
+  darkModeSupport: true
+  # `dir` only: this is a personal tool installed by `make`, and building a dmg
+  # for an app you copy to /Applications yourself is a minute of nothing.
+  target:
+    - dir
