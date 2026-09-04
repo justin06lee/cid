@@ -1,0 +1,12 @@
+<!--
+  Menubar icon. macOS template image: pure black plus alpha, and the system
+  recolours it for light/dark and inverts it when the menu is open — so no
+  colour here, and no glow, which is why this is drawn at 16px rather than
+  scaled down from the app icon (the slits would collapse to a smear).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <g fill="#000000">
+    <path d="M 1.5 6.6 Q 5.01 5.4 7.2 8.4 Q 3.69 9.6 1.5 6.6 Z"/>
+    <path d="M 8.8 8.4 Q 10.99 5.4 14.5 6.6 Q 12.31 9.6 8.8 8.4 Z"/>
+  </g>
+</svg>

@@ -1,35 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import type { Edit, IngestProgress } from '@shared/types'
+import type { AppInfo, IngestProgress } from '@shared/types'
 import { MOOD_AXES } from '@shared/moods'
-import { vibeCard } from '@shared/vibe'
-import { expandQuery } from '@shared/slang'
-import { embed, embedOne, loadModel, moodProfile, type ModelStatus } from './embed'
-import { rank, hitMe } from './search'
+import { useLibrary } from './useLibrary'
+import { hitMe } from './search'
 import EditCard from './components/EditCard'
 import Player from './components/Player'
 import AddSheet from './components/AddSheet'
 
-interface AppInfo {
-  libraryRoot: string
-  hasYtdlp: boolean
-  hasFfmpeg: boolean
-}
-
-const EMBED_BATCH = 8
-
 export default function App(): JSX.Element {
-  const [edits, setEdits] = useState<Edit[]>([])
-  const [vectors, setVectors] = useState<Record<string, number[]>>({})
   const [info, setInfo] = useState<AppInfo | null>(null)
-
-  const [query, setQuery] = useState('')
-  const [settledQuery, setSettledQuery] = useState('')
-  const [queryVector, setQueryVector] = useState<Float32Array | null>(null)
   const [activeMoods, setActiveMoods] = useState<string[]>([])
   const [starredOnly, setStarredOnly] = useState(false)
 
-  const [modelStatus, setModelStatus] = useState<ModelStatus>({ state: 'idle' })
-  const [backlog, setBacklog] = useState(0)
+  const filters = useMemo(() => ({ activeMoods, starredOnly }), [activeMoods, starredOnly])
+  const lib = useLibrary(filters)
+  const {
+    edits, modelStatus, backlog, query, setQuery, results,
+    markPlayed, toggleStar, addEdits
+  } = lib
 
   const [playing, setPlaying] = useState<{ ids: string[]; index: number } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -38,19 +26,11 @@ export default function App(): JSX.Element {
   const [dragging, setDragging] = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
-  const embedRunning = useRef(false)
 
   /* ── boot ──────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    void (async () => {
-      setInfo(await window.cid.info())
-      setEdits(await window.cid.list())
-      setVectors(await window.cid.vectors())
-    })()
-    // Warm the model immediately: search is the whole point of the app and a
-    // cold pipeline on first keystroke feels broken.
-    loadModel(setModelStatus).catch(() => {})
+    void (async () => setInfo(await window.cid.info()))()
   }, [])
 
   useEffect(() => window.cid.onIngestProgress((p) => {
@@ -62,66 +42,8 @@ export default function App(): JSX.Element {
     })
   }), [])
 
-  /* ── embedding backlog ─────────────────────────────────────────────── */
-
-  useEffect(() => {
-    if (modelStatus.state !== 'ready' || embedRunning.current) return
-    const missing = edits.filter((e) => !vectors[e.id])
-    setBacklog(missing.length)
-    if (missing.length === 0) return
-
-    embedRunning.current = true
-    void (async () => {
-      try {
-        for (let i = 0; i < missing.length; i += EMBED_BATCH) {
-          const batch = missing.slice(i, i + EMBED_BATCH)
-          const vecs = await embed(batch.map(vibeCard))
-          for (let j = 0; j < batch.length; j++) {
-            const edit = batch[j]
-            const values = Array.from(vecs[j])
-            const profile = await moodProfile(vecs[j])
-            await window.cid.commitEmbedding(edit.id, values, profile.moods, profile.scores)
-            setVectors((v) => ({ ...v, [edit.id]: values }))
-            setEdits((es) =>
-              es.map((e) =>
-                e.id === edit.id ? { ...e, moods: profile.moods, moodScores: profile.scores } : e
-              )
-            )
-          }
-          setBacklog(missing.length - Math.min(i + EMBED_BATCH, missing.length))
-        }
-      } catch (err) {
-        console.error('[cid] embedding failed', err)
-      } finally {
-        embedRunning.current = false
-      }
-    })()
-  }, [edits, vectors, modelStatus])
-
-  /* ── query ─────────────────────────────────────────────────────────── */
-
-  useEffect(() => {
-    const q = query.trim()
-    if (!q) {
-      setSettledQuery('')
-      setQueryVector(null)
-      return
-    }
-    const timer = setTimeout(() => {
-      setSettledQuery(q)
-      // Lexical matching already ran on the raw query; the vector just upgrades
-      // the same result set when it lands, so a slow embed never blocks typing.
-      // Only the embedded copy gets slang glosses — the lexical half still
-      // matches on exactly what was typed.
-      embedOne(expandQuery(q)).then(setQueryVector).catch(() => setQueryVector(null))
-    }, 180)
-    return () => clearTimeout(timer)
-  }, [query])
-
-  const results = useMemo(
-    () => rank(edits, vectors, { query: settledQuery, queryVector, activeMoods, starredOnly }),
-    [edits, vectors, settledQuery, queryVector, activeMoods, starredOnly]
-  )
+  // The menu bar can ask for the add sheet without the window being focused.
+  useEffect(() => window.cid.onOpenAdd(() => setAddOpen(true)), [])
 
   const moodCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -135,16 +57,9 @@ export default function App(): JSX.Element {
     (index: number) => {
       setPlaying({ ids: results.map((r) => r.edit.id), index })
       const id = results[index]?.edit.id
-      if (id) {
-        void window.cid.played(id)
-        setEdits((es) =>
-          es.map((e) =>
-            e.id === id ? { ...e, playCount: e.playCount + 1, lastPlayedAt: Date.now() } : e
-          )
-        )
-      }
+      if (id) markPlayed(id)
     },
-    [results]
+    [results, markPlayed]
   )
 
   const roll = useCallback(() => {
@@ -157,61 +72,46 @@ export default function App(): JSX.Element {
     setPlaying((p) => {
       if (!p || p.ids.length === 0) return p
       const index = (p.index + delta + p.ids.length) % p.ids.length
-      const id = p.ids[index]
-      void window.cid.played(id)
-      setEdits((es) =>
-        es.map((e) =>
-          e.id === id ? { ...e, playCount: e.playCount + 1, lastPlayedAt: Date.now() } : e
-        )
-      )
+      markPlayed(p.ids[index])
       return { ...p, index }
     })
-  }, [])
+  }, [markPlayed])
 
   const nowPlaying = playing ? edits.find((e) => e.id === playing.ids[playing.index]) ?? null : null
 
-  const toggleStar = useCallback(async (id: string, starred: boolean) => {
-    await window.cid.patch(id, { starred })
-    setEdits((es) => es.map((e) => (e.id === id ? { ...e, starred } : e)))
-  }, [])
-
+  // Deleting also has to pull the edit out of whatever is currently queued up.
   const removeEdit = useCallback(async (id: string) => {
-    await window.cid.remove(id)
-    setEdits((es) => es.filter((e) => e.id !== id))
-    setVectors((v) => {
-      const next = { ...v }
-      delete next[id]
-      return next
-    })
+    await lib.removeEdit(id)
     setPlaying((p) => {
       if (!p) return p
       const ids = p.ids.filter((x) => x !== id)
       if (ids.length === 0) return null
       return { ids, index: Math.min(p.index, ids.length - 1) }
     })
-  }, [])
+  }, [lib])
 
   const addUrl = useCallback(async (url: string) => {
     setIngesting((n) => n + 1)
     try {
       const result = await window.cid.addUrl(url)
-      if (result.ok && result.edit) setEdits((es) => [...es, result.edit!])
+      if (result.ok && result.edit) addEdits([result.edit])
     } finally {
       setIngesting((n) => n - 1)
     }
-  }, [])
+  }, [addEdits])
 
   const addFiles = useCallback(async (paths: string[]) => {
     if (paths.length === 0) return
     setIngesting((n) => n + 1)
     try {
-      const results = await window.cid.addFiles(paths)
-      const added = results.flatMap((r) => (r.ok && r.edit ? [r.edit] : []))
-      if (added.length > 0) setEdits((es) => [...es, ...added])
+      const added = (await window.cid.addFiles(paths)).flatMap((r) =>
+        r.ok && r.edit ? [r.edit] : []
+      )
+      addEdits(added)
     } finally {
       setIngesting((n) => n - 1)
     }
-  }, [])
+  }, [addEdits])
 
   const pickFiles = useCallback(async () => {
     await addFiles(await window.cid.pickFiles())

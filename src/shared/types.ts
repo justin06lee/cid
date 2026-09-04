@@ -52,3 +52,14 @@ export interface AddResult {
 export type EditPatch = Partial<
   Pick<Edit, 'title' | 'tags' | 'moods' | 'starred'>
 >
+
+/** What the renderer needs to know about its host process and environment. */
+export interface AppInfo {
+  libraryRoot: string
+  hasYtdlp: boolean
+  hasFfmpeg: boolean
+  /** The global shortcut that summons the panel, as an Electron accelerator. */
+  summonAccelerator: string
+  /** False when another app already owns that shortcut. */
+  summonRegistered: boolean
+}

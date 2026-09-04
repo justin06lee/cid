@@ -4,8 +4,8 @@
 
 # cid
 
-**A desktop app for the pile of anime edits you download when you need to lock in.**<br>
-*Search them by how you feel, not by what they're called.*
+**A menu bar app for the pile of anime edits you download when you need to lock in.**<br>
+*Hit ⌘⇧↵ anywhere and one starts playing. Type to find a different one.*
 
 </div>
 
@@ -17,8 +17,10 @@ weakest guy gets back up — and finding it means scrolling past forty thumbnail
 something looks right.
 
 cid fixes that. Paste a link, and it downloads the video, reads what the uploader wrote
-about it, and works out what the edit *feels* like. Then you type how you feel and it
-hands you one.
+about it, and works out what the edit *feels* like. Then it lives in your menu bar: hit
+<kbd>⌘⇧↵</kbd> from anywhere and a phone-shaped panel drops in over whatever you were
+doing, already playing something. Start typing and it searches. <kbd>esc</kbd> and it's
+gone again.
 
 Named after Cid Kagenou, who spent the whole show pretending to be a background
 character.
@@ -84,7 +86,36 @@ First launch downloads the embedding model once (~25MB, from Hugging Face) and k
 in the app's cache. The inference runtime ships inside the app rather than being fetched
 from a CDN, so after that first download cid needs the network only to fetch videos.
 
-## Using it
+## The panel
+
+This is how you'll actually use cid. <kbd>⌘⇧↵</kbd> from any app summons a 400×712
+panel — upright, because most edits are 9:16 and this way they fill the frame instead of
+sitting in a letterbox. It appears centred on whichever screen your pointer is on, over
+fullscreen apps included, and starts playing immediately.
+
+| | |
+|---|---|
+| <kbd>⌘⇧↵</kbd> | summon, or dismiss if it's already up |
+| *any letter* | start searching — no need to click anything first |
+| <kbd>↵</kbd> | with the box empty: not this one, give me another |
+| <kbd>↵</kbd> | while searching: play the highlighted result |
+| <kbd>↑</kbd> <kbd>↓</kbd> | move through results |
+| <kbd>space</kbd> | pause (only while the box is empty, so you can still type spaces) |
+| <kbd>esc</kbd> | hide it back to the menu bar |
+
+Clicking the menu bar icon does the same as the shortcut; right-clicking it opens a menu
+with the library, the add sheet, and quit. An edit that finishes rolls straight into
+another, so leaving it up is a queue.
+
+Dismissing pauses the video — an invisible window playing audio over everything else is
+the one thing a panel like this must never do.
+
+Launching cid opens the panel if you already have a library, and the library window if
+you don't. Closing the library window drops cid back to the menu bar rather than
+quitting; the dock icon follows that window, so it's there while you're managing the
+library and gone the rest of the time.
+
+## The library window
 
 Hit <kbd>⌘N</kbd> and paste a link. cid downloads the video into your library, pulls a
 poster frame, and reads it. You can also drop video files anywhere on the window, or
@@ -134,6 +165,9 @@ All optional, all environment variables:
 | `CID_COOKIES_FROM_BROWSER` | `chrome`, `firefox`, `safari`, `brave`… — lends yt-dlp your session for age-gated or login-walled videos |
 | `CID_YTDLP_ARGS` | extra flags passed straight to yt-dlp |
 
+If another app already owns <kbd>⌘⇧↵</kbd>, cid says so in the menu bar menu rather than
+failing quietly; the icon still works.
+
 YouTube periodically starts refusing whichever internal player client yt-dlp picked,
 usually as a 403 partway through a download. cid tries several in turn and reuses
 whichever works, so this mostly resolves itself. When it doesn't,
@@ -157,11 +191,17 @@ you catch yourself searching for something the model clearly didn't understand.
 
 ```
 src/
-  main/        Electron main — library store, yt-dlp/ffmpeg ingest, cid:// protocol
+  main/        Electron main — windows and tray, library store, yt-dlp/ffmpeg
+               ingest, the cid:// protocol
   preload/     the IPC surface exposed to the renderer
   renderer/    React UI, embedding, search ranking
   shared/      types, mood axes, slang, the vibe-card builder
 ```
+
+Both windows run the same bundle and pick their face off the URL hash, and both drive
+their own copy of `useLibrary` — the library, its vectors, and a ranked result set. That
+means two copies of a 25MB model in memory, in exchange for a panel that neither knows
+nor cares whether the library window is open.
 
 The renderer is served over a custom `cid://` scheme rather than `file://`. That is not
 decoration: onnxruntime boots by wrapping its wasm glue in a Blob and `import()`ing the

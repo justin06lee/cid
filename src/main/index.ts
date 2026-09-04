@@ -1,4 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from 'electron'
+import {
+  app, ipcMain, dialog, shell, nativeTheme,
+  Tray, Menu, nativeImage, globalShortcut
+} from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AddResult, EditPatch, IngestProgress } from '../shared/types.js'
@@ -7,62 +10,91 @@ import { addFromUrl, addFromFile, sweepPartials } from './ingest.js'
 import { resolveBin } from './bin.js'
 import { libraryRoot, mediaDir } from './paths.js'
 import {
+  showLibrary, getLibraryWindow, showOverlay, hideOverlay, toggleOverlay, syncDock
+} from './windows.js'
+import {
   loadLibrary, saveNow, allEdits, addEdit, patchEdit, removeEdit,
   markPlayed, getEdit, unembeddedIds, getVectors, setVector
 } from './library.js'
 
 const dirname = fileURLToPath(new URL('.', import.meta.url))
 
+/** Verbatim files (the menubar icon and its @2x) rather than bundled assets, so
+ *  macOS can still find `trayTemplate@2x.png` sitting next to the 1x by name. */
+const resourcesDir = app.isPackaged
+  ? join(process.resourcesPath, 'resources')
+  : join(dirname, '../../resources')
+
+export const SUMMON_ACCELERATOR = 'CommandOrControl+Shift+Return'
+
 // Must happen before app is ready.
 registerCidScheme()
 
-let win: BrowserWindow | null = null
-
-function createWindow(): void {
-  win = new BrowserWindow({
-    width: 1240,
-    height: 820,
-    minWidth: 860,
-    minHeight: 600,
-    show: false,
-    backgroundColor: '#07070a',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 18, y: 20 },
-    webPreferences: {
-      // electron-vite emits .mjs here because the package is type:module, and
-      // Electron only treats a preload as ESM when the extension says so.
-      preload: join(dirname, '../preload/index.mjs'),
-      contextIsolation: true,
-      sandbox: false,
-      nodeIntegration: false
-    }
-  })
-
-  win.once('ready-to-show', () => win?.show())
-
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    // Not loadFile: a file:// page has an opaque origin, and onnxruntime-web
-    // boots by import()ing a blob: module, which opaque origins can't do.
-    win.loadURL('cid://app/index.html')
-  }
-}
+let tray: Tray | null = null
+let shortcutRegistered = false
 
 function report(url: string, p: Omit<IngestProgress, 'url'>): void {
-  win?.webContents.send('ingest:progress', { url, ...p } satisfies IngestProgress)
+  getLibraryWindow()?.webContents.send('ingest:progress', { url, ...p } satisfies IngestProgress)
+}
+
+function buildTrayMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: 'Pull up an edit',
+      accelerator: SUMMON_ACCELERATOR,
+      click: () => showOverlay()
+    },
+    ...(shortcutRegistered
+      ? []
+      : [
+          {
+            label: '⚠ ⌘⇧↵ is taken by another app',
+            enabled: false
+          } as const
+        ]),
+    { type: 'separator' },
+    { label: 'Library…', click: () => showLibrary() },
+    {
+      label: 'Add an edit…',
+      click: () => {
+        showLibrary().webContents.send('library:openAdd')
+      }
+    },
+    { label: 'Open library folder', click: () => void shell.openPath(libraryRoot) },
+    { type: 'separator' },
+    { label: 'Quit cid', role: 'quit' }
+  ])
+}
+
+function createTray(): void {
+  const image = nativeImage.createFromPath(join(resourcesDir, 'trayTemplate.png'))
+  // Template images get recoloured by macOS for light/dark menu bars and
+  // inverted on click; without this the glyph stays black on a dark menu bar.
+  image.setTemplateImage(true)
+
+  tray = new Tray(image)
+  tray.setToolTip('cid — pull up an edit')
+
+  // Left click is the app's whole purpose, so it summons rather than opening a
+  // menu. The menu is on right click, where nothing else wants to be.
+  tray.on('click', () => toggleOverlay())
+  tray.on('right-click', () => tray?.popUpContextMenu(buildTrayMenu()))
+}
+
+function registerShortcut(): void {
+  shortcutRegistered = globalShortcut.register(SUMMON_ACCELERATOR, () => toggleOverlay())
+  if (!shortcutRegistered) {
+    console.warn(`[cid] could not register ${SUMMON_ACCELERATOR} — another app owns it`)
+  }
 }
 
 function registerIpc(): void {
   ipcMain.handle('app:info', () => ({
     libraryRoot,
     hasYtdlp: Boolean(resolveBin('yt-dlp')),
-    hasFfmpeg: Boolean(resolveBin('ffmpeg'))
+    hasFfmpeg: Boolean(resolveBin('ffmpeg')),
+    summonAccelerator: SUMMON_ACCELERATOR,
+    summonRegistered: shortcutRegistered
   }))
 
   ipcMain.handle('library:list', () => allEdits())
@@ -97,6 +129,12 @@ function registerIpc(): void {
   })
   ipcMain.handle('library:openFolder', () => shell.openPath(libraryRoot))
 
+  ipcMain.handle('overlay:hide', () => hideOverlay())
+  ipcMain.handle('overlay:openLibrary', () => {
+    hideOverlay()
+    showLibrary()
+  })
+
   ipcMain.handle('ingest:url', async (_e, url: string): Promise<AddResult> => {
     try {
       const edit = await addFromUrl(url, (p) => report(url, p))
@@ -129,8 +167,9 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('ingest:pickFiles', async () => {
-    if (!win) return []
-    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    const parent = getLibraryWindow()
+    if (!parent) return []
+    const { canceled, filePaths } = await dialog.showOpenDialog(parent, {
       title: 'Add edits',
       properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Video', extensions: ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'avi'] }]
@@ -141,22 +180,46 @@ function registerIpc(): void {
 
 nativeTheme.themeSource = 'dark'
 
-app.whenReady().then(() => {
-  serveRendererFrom(join(dirname, '../renderer'))
-  handleCidProtocol()
-  loadLibrary()
-  sweepPartials()
-  registerIpc()
-  createWindow()
+// A second copy would fight over the global shortcut and the library file.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showOverlay())
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  app.whenReady().then(() => {
+    serveRendererFrom(join(dirname, '../renderer'))
+    handleCidProtocol()
+    loadLibrary()
+    sweepPartials()
+    registerIpc()
+    createTray()
+    registerShortcut()
+
+    // A menubar app throwing a full window at you on launch is wrong, but an
+    // empty library has nothing to summon and needs somewhere to add from. With
+    // a stocked library, launching does the thing the app exists for.
+    if (allEdits().length === 0) {
+      showLibrary()
+    } else {
+      // Drop the dock icon before showing the panel, not after: hiding it
+      // deactivates the app, which would pull focus straight back off the panel.
+      syncDock()
+      showOverlay()
+    }
+
+    app.on('activate', () => showLibrary())
   })
-})
+}
 
 app.on('window-all-closed', () => {
+  // Never quit here: closing the library window drops cid back to the menu bar,
+  // which is where it is supposed to live.
   saveNow()
-  if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+  saveNow()
 })
 
 app.on('before-quit', () => saveNow())

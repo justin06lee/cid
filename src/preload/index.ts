@@ -1,9 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { AddResult, Edit, EditPatch, IngestProgress } from '../shared/types.js'
+import type { AddResult, AppInfo, Edit, EditPatch, IngestProgress } from '../shared/types.js'
 
 const api = {
-  info: (): Promise<{ libraryRoot: string; hasYtdlp: boolean; hasFfmpeg: boolean }> =>
-    ipcRenderer.invoke('app:info'),
+  info: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
 
   list: (): Promise<Edit[]> => ipcRenderer.invoke('library:list'),
   vectors: (): Promise<Record<string, number[]>> => ipcRenderer.invoke('library:vectors'),
@@ -27,6 +26,27 @@ const api = {
   addUrl: (url: string): Promise<AddResult> => ipcRenderer.invoke('ingest:url', url),
   addFiles: (paths: string[]): Promise<AddResult[]> => ipcRenderer.invoke('ingest:files', paths),
   pickFiles: (): Promise<string[]> => ipcRenderer.invoke('ingest:pickFiles'),
+
+  hideOverlay: (): Promise<void> => ipcRenderer.invoke('overlay:hide'),
+  openLibraryFromOverlay: (): Promise<void> => ipcRenderer.invoke('overlay:openLibrary'),
+
+  /** Fired every time the panel is summoned — the cue to roll a fresh edit. */
+  onOverlayShown: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('overlay:shown', listener)
+    return () => ipcRenderer.off('overlay:shown', listener)
+  },
+  /** Fired just before the panel hides, while it can still stop its audio. */
+  onOverlayHidden: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('overlay:hidden', listener)
+    return () => ipcRenderer.off('overlay:hidden', listener)
+  },
+  onOpenAdd: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('library:openAdd', listener)
+    return () => ipcRenderer.off('library:openAdd', listener)
+  },
 
   onIngestProgress: (cb: (p: IngestProgress) => void): (() => void) => {
     const listener = (_e: unknown, p: IngestProgress): void => cb(p)

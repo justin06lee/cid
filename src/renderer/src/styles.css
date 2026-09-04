@@ -417,3 +417,162 @@ input { font-family: inherit; color: inherit; }
   letter-spacing: 0.3em; text-transform: uppercase;
   pointer-events: none;
 }
+
+/* ══ the summonable panel ═════════════════════════════════════════════════
+   A phone-shaped window that appears over whatever you were doing, plays one
+   edit, and goes away. The window itself is transparent so this can round its
+   own corners — hence the transparent body. */
+
+body.is-overlay { background: transparent; }
+
+.ov {
+  position: relative;
+  height: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(224, 33, 60, 0.28);
+  box-shadow: 0 30px 90px -20px rgba(0, 0, 0, 0.9);
+}
+
+/* Frameless windows have nothing to grab, so the top edge is the handle. */
+.ov-drag {
+  position: absolute; top: 0; left: 0; right: 0; height: 12px;
+  -webkit-app-region: drag;
+  z-index: 5;
+}
+
+.ov-stage { position: absolute; inset: 0; background: #000; }
+.ov-stage video {
+  width: 100%; height: 100%;
+  /* contain, not cover: a 16:9 edit in a 9:16 window should letterbox rather
+     than have most of the frame cropped away. */
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+
+.ov-blank {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+}
+.ov-blank .big {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.24em; text-transform: uppercase; color: var(--dim);
+}
+.ov-blank button {
+  background: none; border: 1px solid var(--line-hi); color: var(--dim);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  padding: 8px 14px; text-transform: uppercase;
+}
+.ov-blank button:hover { border-color: var(--crimson); color: var(--text); }
+
+.ov-paused {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 34px; color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 4px 24px #000;
+  pointer-events: none;
+}
+
+/* ── search ── */
+
+.ov-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  padding: 16px 16px 26px;
+  /* Heavy enough to stay legible over a bright frame — edits are frequently
+     near-white, and a light scrim left the placeholder invisible. */
+  background: linear-gradient(
+    180deg,
+    rgba(4, 4, 8, 0.97) 0%,
+    rgba(4, 4, 8, 0.85) 55%,
+    rgba(4, 4, 8, 0) 100%
+  );
+  z-index: 4;
+}
+/* While searching the strip is chrome, not an overlay on the video. */
+.ov.searching .ov-top {
+  background: rgba(5, 5, 9, 0.93);
+  backdrop-filter: blur(14px);
+  padding-bottom: 14px;
+}
+.ov-search {
+  width: 100%;
+  background: none; border: 0; outline: none;
+  font-size: 15px; color: var(--text);
+  padding: 4px 2px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.ov-search::placeholder {
+  color: rgba(160, 160, 185, 0.5);
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+.ov-search:not(:placeholder-shown) { border-bottom-color: var(--crimson); }
+
+.ov-results {
+  position: absolute; top: 58px; left: 0; right: 0; bottom: 0;
+  overflow-y: auto;
+  background: rgba(5, 5, 9, 0.93);
+  backdrop-filter: blur(14px);
+  padding: 6px 0 10px;
+  z-index: 3;
+}
+.ov-none {
+  padding: 26px 18px; text-align: center;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--dimmer);
+}
+
+.ov-row {
+  width: 100%;
+  display: flex; align-items: center; gap: 11px;
+  padding: 8px 14px;
+  background: none; border: 0; border-left: 2px solid transparent;
+  text-align: left;
+}
+.ov-row.on { background: rgba(224, 33, 60, 0.14); border-left-color: var(--crimson); }
+.ov-row img, .ov-row .noshot {
+  width: 62px; height: 35px; flex-shrink: 0;
+  object-fit: cover; background: var(--panel); border: 1px solid var(--line);
+}
+.ov-row .t {
+  flex: 1; min-width: 0; font-size: 12px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ov-row .d {
+  flex-shrink: 0; font-family: var(--mono); font-size: 9.5px; color: var(--dimmer);
+}
+
+/* ── now playing ── */
+
+.ov-bottom {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 34px 16px 14px;
+  background: linear-gradient(0deg, rgba(4, 4, 8, 0.95) 30%, rgba(4, 4, 8, 0) 100%);
+  z-index: 4;
+  pointer-events: none;
+}
+.ov-title {
+  font-size: 13px; line-height: 1.4; margin-bottom: 7px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ov-sub {
+  display: flex; gap: 9px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.15em; text-transform: uppercase; color: var(--dimmer);
+}
+.ov-sub .m { color: var(--crimson); }
+.ov-hint {
+  margin-top: 10px;
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.1em; color: var(--dimmer);
+}
+.ov-hint kbd {
+  border: 1px solid var(--line-hi); padding: 1px 4px; margin-right: 2px;
+  border-radius: 2px;
+}

@@ -12,6 +12,12 @@ files:
 
 asar: true
 
+# Copied verbatim rather than bundled: macOS resolves the menubar icon's @2x
+# variant by filename, so the pair has to keep its names and sit together.
+extraResources:
+  - from: resources
+    to: resources
+
 mac:
   category: public.app-category.entertainment
   icon: build/icon.png
