@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/cid.svg" alt="cid" width="380" />
+<img src="assets/cid.svg" alt="cid" width="600" />
 
 # cid
 
