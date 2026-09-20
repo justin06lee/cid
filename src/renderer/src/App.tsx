@@ -15,7 +15,7 @@ export default function App(): JSX.Element {
   const filters = useMemo(() => ({ activeMoods, starredOnly }), [activeMoods, starredOnly])
   const lib = useLibrary(filters)
   const {
-    edits, modelStatus, backlog, query, setQuery, results,
+    edits, modelStatus, backlog, loading, query, setQuery, results,
     markPlayed, toggleStar, addEdits
   } = lib
 
@@ -272,7 +272,24 @@ export default function App(): JSX.Element {
       </header>
 
       <main className="results">
-        {results.length === 0 ? (
+        {loading ? (
+          /* Same geometry as the real grid, so the cards do not jump into place
+             when library.json lands. Purely decorative — the screen reader is
+             told the region is busy instead of being read eight empty cards. */
+          <div className="grid" aria-busy="true" aria-label="Loading library">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div className="card skel" key={i} aria-hidden="true">
+                <div className="shot" />
+                <div className="title">
+                  <span className="line" />
+                </div>
+                <div className="moodline">
+                  <span className="line short" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : results.length === 0 ? (
           <div className="empty">
             {edits.length === 0 ? (
               <>
@@ -308,7 +325,7 @@ export default function App(): JSX.Element {
           <i className={`dot ${statusDot}`} />
           {statusText}
         </span>
-        <span className="seg">
+        <span className="seg count">
           {results.length} / {edits.length} edits
         </span>
         {info && !info.hasYtdlp && <span className="seg">⚠ brew install yt-dlp</span>}

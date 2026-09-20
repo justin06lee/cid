@@ -21,6 +21,12 @@ export interface Edit {
   durationSec: number
   width: number
   height: number
+  /**
+   * False only when ffprobe looked and found no audio track. Edits added before
+   * this field existed, or while ffmpeg was missing, leave it undefined — which
+   * reads as "no reason to doubt it" everywhere it is consulted.
+   */
+  hasAudio: boolean
 
   addedAt: number
   playCount: number

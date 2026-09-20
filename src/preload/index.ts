@@ -42,6 +42,16 @@ const api = {
     ipcRenderer.on('overlay:hidden', listener)
     return () => ipcRenderer.off('overlay:hidden', listener)
   },
+  /**
+   * Fired when edits are added or removed, in every window — including the ones
+   * that did not make the change. The panel outlives the library window and
+   * would otherwise never hear about anything added after it was first summoned.
+   */
+  onLibraryChanged: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('library:changed', listener)
+    return () => ipcRenderer.off('library:changed', listener)
+  },
   onOpenAdd: (cb: () => void): (() => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('library:openAdd', listener)

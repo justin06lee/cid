@@ -13,6 +13,10 @@ export interface LibraryState {
   modelStatus: ModelStatus
   /** How many edits are still waiting to be read by the model. */
   backlog: number
+  /** True until the first read of library.json lands. */
+  loading: boolean
+  /** Re-read the library from main. Safe to call at any time. */
+  refresh: () => Promise<void>
 
   query: string
   setQuery: (q: string) => void
@@ -40,6 +44,7 @@ export function useLibrary(filters: Omit<RankOptions, 'query' | 'queryVector'>):
   const [vectors, setVectors] = useState<Record<string, number[]>>({})
   const [modelStatus, setModelStatus] = useState<ModelStatus>({ state: 'idle' })
   const [backlog, setBacklog] = useState(0)
+  const [loading, setLoading] = useState(true)
 
   const [query, setQuery] = useState('')
   const [settledQuery, setSettledQuery] = useState('')
@@ -47,15 +52,28 @@ export function useLibrary(filters: Omit<RankOptions, 'query' | 'queryVector'>):
 
   const embedRunning = useRef(false)
 
-  useEffect(() => {
-    void (async () => {
+  const refresh = useCallback(async () => {
+    // finally, not just the happy path: a failed read must still end the
+    // loading state, or the grid stays skeletons forever.
+    try {
       setEdits(await window.cid.list())
       setVectors(await window.cid.vectors())
-    })()
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
     // Warm the model immediately: search is the whole point of the app and a
     // cold pipeline on first keystroke feels broken.
     loadModel(setModelStatus).catch(() => {})
-  }, [])
+  }, [refresh])
+
+  // Main is the only authority on what the library contains, and the other
+  // window can change it. Without this the panel keeps showing whatever existed
+  // the moment it was first summoned, for as long as the app stays running.
+  useEffect(() => window.cid.onLibraryChanged(() => void refresh()), [refresh])
 
   /* ── embedding backlog ───────────────────────────────────────────────── */
 
@@ -150,7 +168,7 @@ export function useLibrary(filters: Omit<RankOptions, 'query' | 'queryVector'>):
   }, [])
 
   return {
-    edits, vectors, modelStatus, backlog,
+    edits, vectors, modelStatus, backlog, loading, refresh,
     query, setQuery, settledQuery, results,
     markPlayed, toggleStar, removeEdit, addEdits
   }

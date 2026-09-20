@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import type { Edit } from '@shared/types'
 import { MOOD_BY_KEY } from '@shared/moods'
 import { useLibrary } from './useLibrary'
+import { describeMediaError } from './mediaError'
 import { hitMe } from './search'
 import { fmtDuration } from './components/EditCard'
 
@@ -9,11 +10,14 @@ const NO_FILTERS = { activeMoods: [] as string[], starredOnly: false }
 
 export default function Overlay(): JSX.Element {
   const lib = useLibrary(NO_FILTERS)
-  const { results, query, setQuery, edits, markPlayed } = lib
+  const { results, query, setQuery, edits, markPlayed, refresh } = lib
 
   const [current, setCurrent] = useState<Edit | null>(null)
   const [selected, setSelected] = useState(0)
   const [paused, setPaused] = useState(false)
+  // The panel has no controls of its own, so a file that will not decode leaves
+  // nothing on screen at all and no way to tell why.
+  const [failed, setFailed] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -32,6 +36,7 @@ export default function Overlay(): JSX.Element {
       if (!edit) return
       setCurrent(edit)
       setPaused(false)
+      setFailed(null)
       markPlayed(edit.id)
     },
     [markPlayed]
@@ -47,6 +52,7 @@ export default function Overlay(): JSX.Element {
       if (!pick) return now
       markPlayed(pick.id)
       setPaused(false)
+      setFailed(null)
       return pick
     })
   }, [markPlayed])
@@ -59,11 +65,16 @@ export default function Overlay(): JSX.Element {
         setQuery('')
         setSelected(0)
         inputRef.current?.focus()
+        // Belt and braces alongside the library:changed broadcast. This window
+        // is only ever hidden, never closed, so a single missed message would
+        // otherwise leave it stale for the rest of the run — and the summon is
+        // exactly the moment being wrong is visible.
+        void refresh()
         // The library may still be loading on the very first summon; the effect
         // below picks it up as soon as there is something to choose from.
         roll()
       }),
-    [roll, setQuery]
+    [roll, setQuery, refresh]
   )
 
   useEffect(
@@ -76,6 +87,17 @@ export default function Overlay(): JSX.Element {
       }),
     [setQuery]
   )
+
+  // An edit deleted in the library window must not stay up on the stage: the
+  // file behind it is gone, so it would sit there as a dead frame — or a
+  // "won't play" — until the next summon. Dropping it lets the effect below
+  // choose a replacement, or the empty state take over if it was the last one.
+  useEffect(() => {
+    if (current && !edits.some((e) => e.id === current.id)) {
+      setCurrent(null)
+      setFailed(null)
+    }
+  }, [edits, current])
 
   // First summon usually beats the library load, leaving an empty panel. As soon
   // as edits exist and nothing is playing, start something.
@@ -159,6 +181,7 @@ export default function Overlay(): JSX.Element {
             onEnded={roll}
             onPause={() => setPaused(true)}
             onPlay={() => setPaused(false)}
+            onError={(e) => setFailed(describeMediaError(e.currentTarget.error))}
           />
         ) : (
           <div className="ov-blank">
@@ -174,7 +197,14 @@ export default function Overlay(): JSX.Element {
             )}
           </div>
         )}
-        {paused && current && <div className="ov-paused">❚❚</div>}
+        {failed && current && (
+          <div className="ov-fail" role="alert">
+            <span className="big">won't play</span>
+            <span className="why">{failed}</span>
+            <span className="hint">press ↵ for another</span>
+          </div>
+        )}
+        {paused && current && !failed && <div className="ov-paused">❚❚</div>}
       </div>
 
       <div className="ov-top">

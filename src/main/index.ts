@@ -1,6 +1,6 @@
 import {
   app, ipcMain, dialog, shell, nativeTheme,
-  Tray, Menu, nativeImage, globalShortcut
+  Tray, Menu, nativeImage, globalShortcut, BrowserWindow
 } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,6 +35,25 @@ let shortcutRegistered = false
 
 function report(url: string, p: Omit<IngestProgress, 'url'>): void {
   getLibraryWindow()?.webContents.send('ingest:progress', { url, ...p } satisfies IngestProgress)
+}
+
+/**
+ * Tell every window that the set of edits changed.
+ *
+ * Each renderer reads the library once when it mounts, and the panel is
+ * long-lived: it is built the first time it is summoned and only hidden after
+ * that. Without this, edits added in the library window never reach a panel
+ * that was summoned before them — so ⌘⇧↵ keeps insisting the library is empty
+ * while the grid behind it is full.
+ *
+ * Only structural changes broadcast. Play counts and stars are written through
+ * immediately and already shown locally, so refetching on those would just
+ * clobber whichever window made the change, mid-interaction.
+ */
+function broadcastLibraryChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('library:changed')
+  }
 }
 
 function buildTrayMenu(): Menu {
@@ -114,7 +133,11 @@ function registerIpc(): void {
   )
 
   ipcMain.handle('library:patch', (_e, id: string, patch: EditPatch) => patchEdit(id, patch) ?? null)
-  ipcMain.handle('library:remove', (_e, id: string) => removeEdit(id))
+  ipcMain.handle('library:remove', (_e, id: string) => {
+    const removed = removeEdit(id)
+    if (removed) broadcastLibraryChanged()
+    return removed
+  })
   ipcMain.handle('library:played', (_e, id: string) => {
     markPlayed(id)
   })
@@ -140,6 +163,7 @@ function registerIpc(): void {
       const edit = await addFromUrl(url, (p) => report(url, p))
       addEdit(edit)
       saveNow()
+      broadcastLibraryChanged()
       report(url, { stage: 'done', percent: 1, message: edit.title })
       return { ok: true, edit }
     } catch (err) {
@@ -163,6 +187,7 @@ function registerIpc(): void {
       }
     }
     saveNow()
+    if (results.some((r) => r.ok)) broadcastLibraryChanged()
     return results
   })
 

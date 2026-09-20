@@ -27,9 +27,15 @@ export default function AddSheet({
       .catch(() => {})
   }, [])
 
+  // yt-dlp is the thing that finds out a link is bad, which means the failure
+  // shows up seconds later at the bottom of the queue. Checking the shape here
+  // catches the common case — a pasted title, a bare domain — immediately.
+  const trimmed = url.trim()
+  const valid = /^https?:\/\/\S+\.\S+/i.test(trimmed)
+  const showBad = trimmed.length > 0 && !valid
+
   const submit = (): void => {
-    const trimmed = url.trim()
-    if (!trimmed) return
+    if (!valid) return
     onSubmit(trimmed)
     setUrl('')
   }
@@ -41,6 +47,8 @@ export default function AddSheet({
         <div className="urlrow">
           <input
             ref={inputRef}
+            className={showBad ? 'bad' : ''}
+            aria-invalid={showBad}
             value={url}
             placeholder="paste a youtube / tiktok / instagram / x link"
             onChange={(e) => setUrl(e.target.value)}
@@ -49,10 +57,13 @@ export default function AddSheet({
               if (e.key === 'Escape') onClose()
             }}
           />
-          <button className="go" onClick={submit} disabled={!url.trim()}>
+          <button className="go" onClick={submit} disabled={!valid}>
             GET
           </button>
         </div>
+        {showBad && (
+          <div className="hint err">That does not look like a link — it needs to start with http.</div>
+        )}
         <div className="hint">
           yt-dlp pulls the video plus its title, description and tags — that metadata is
           what cid embeds, so the moods fill themselves in.{' '}
