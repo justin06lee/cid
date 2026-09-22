@@ -94,6 +94,11 @@ panel — upright, because most edits are 9:16 and this way they fill the frame 
 sitting in a letterbox. It appears centred on whichever screen your pointer is on, over
 fullscreen apps included, and starts playing immediately.
 
+Grab the video anywhere and drag the panel where you want it. From then on it comes back
+to that spot every time, launches included, until *Put the panel back in the middle* in
+the menu bar menu resets it. If the screen it lived on has been unplugged it centres
+instead, rather than summoning somewhere you can't see.
+
 | | |
 |---|---|
 | <kbd>⌘⇧↵</kbd> | summon, or dismiss if it's already up |

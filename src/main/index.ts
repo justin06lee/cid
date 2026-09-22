@@ -10,7 +10,8 @@ import { addFromUrl, addFromFile, sweepPartials } from './ingest.js'
 import { resolveBin } from './bin.js'
 import { libraryRoot, mediaDir } from './paths.js'
 import {
-  showLibrary, getLibraryWindow, showOverlay, hideOverlay, toggleOverlay, syncDock
+  showLibrary, getLibraryWindow, showOverlay, hideOverlay, toggleOverlay, syncDock,
+  isOverlayPinned, resetOverlayPosition, flushPanelPosition
 } from './windows.js'
 import {
   loadLibrary, saveNow, allEdits, addEdit, patchEdit, removeEdit,
@@ -71,6 +72,11 @@ function buildTrayMenu(): Menu {
             enabled: false
           } as const
         ]),
+    // Only once there is somewhere to come back from; until you drag it, the
+    // panel is already centred.
+    ...(isOverlayPinned()
+      ? [{ label: 'Put the panel back in the middle', click: () => resetOverlayPosition() }]
+      : []),
     { type: 'separator' },
     { label: 'Library…', click: () => showLibrary() },
     {
@@ -247,6 +253,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  flushPanelPosition()
   saveNow()
 })
 

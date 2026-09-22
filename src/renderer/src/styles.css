@@ -728,14 +728,15 @@ body.is-overlay { background: transparent; }
     0 0 60px -30px rgb(var(--accent-rgb) / 0.5);
 }
 
-/* Frameless windows have nothing to grab, so the top edge is the handle. */
-.ov-drag {
-  position: absolute; top: 0; left: 0; right: 0; height: var(--s3);
-  -webkit-app-region: drag;
-  z-index: 5;
-}
+/* Frameless windows have nothing to grab, so the video itself is the handle —
+   press anywhere on it and drag, and the panel remembers where you left it.
+   The old handle was a 12px strip along the top that nothing pointed at, which
+   in practice meant the panel could not be moved.
 
-.ov-stage { position: absolute; inset: 0; background: #000; }
+   A drag region swallows clicks, so anything clickable layered over the stage
+   has to opt back out with no-drag: the search box, the result rows, the
+   empty-library button. An overlapping sibling doesn't subtract on its own. */
+.ov-stage { position: absolute; inset: 0; background: #000; -webkit-app-region: drag; }
 .ov-stage video {
   width: 100%; height: 100%;
   /* contain, not cover: a 16:9 edit in a 9:16 window should letterbox rather
@@ -755,6 +756,7 @@ body.is-overlay { background: transparent; }
   letter-spacing: 0.24em; text-transform: uppercase; color: var(--dim);
 }
 .ov-blank button {
+  -webkit-app-region: no-drag;
   background: none; border: 1px solid var(--line-hi); border-radius: var(--r-sm);
   color: var(--dim);
   font-family: var(--mono); font-size: var(--fs-2xs); letter-spacing: var(--track-mid);
@@ -802,6 +804,17 @@ body.is-overlay { background: transparent; }
     rgb(4 3 8 / 0) 100%
   );
   z-index: 4;
+  -webkit-app-region: drag;
+}
+/* Says "this moves" at a glance — the whole video is the handle, but nothing
+   about a video suggests that. Always shown, since hover is unreliable over a
+   drag region. */
+.ov-grip {
+  position: absolute; top: 6px; left: 50%;
+  width: 36px; height: 4px; margin-left: -18px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.22);
+  pointer-events: none;
 }
 /* While searching the strip is chrome, not an overlay on the video. */
 .ov.searching .ov-top {
@@ -810,6 +823,7 @@ body.is-overlay { background: transparent; }
   padding-bottom: var(--s3);
 }
 .ov-search {
+  -webkit-app-region: no-drag;
   width: 100%;
   background: none; border: 0; outline: none;
   font-size: var(--fs-lg); color: var(--text);
@@ -825,6 +839,7 @@ body.is-overlay { background: transparent; }
 .ov-search:not(:placeholder-shown) { border-bottom-color: var(--accent); }
 
 .ov-results {
+  -webkit-app-region: no-drag;
   position: absolute; top: 58px; left: 0; right: 0; bottom: 0;
   overflow-y: auto;
   background: rgb(6 4 12 / 0.94);
