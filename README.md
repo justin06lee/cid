@@ -107,12 +107,17 @@ instead, rather than summoning somewhere you can't see.
 | <kbd>↵</kbd> | while searching: play the highlighted result |
 | <kbd>↑</kbd> <kbd>↓</kbd> | move through results |
 | <kbd>space</kbd> | pause (only while the box is empty, so you can still type spaces) |
+| <kbd>⌘L</kbd> | loop — replay this edit instead of rolling on; <kbd>⌘L</kbd> again to stop |
 | <kbd>esc</kbd> | hide it back to the menu bar |
 
 Clicking the menu bar icon does the same as the shortcut; right-clicking it opens a menu
 with the library, the add sheet, and quit. An edit that finishes rolls straight into
 another, so leaving it up is a queue — one that plays your whole library before it
 repeats anything (see HIT ME below; it's the same deck).
+
+Looping is a mode, like repeat-one on a music player: it stays on until you turn it off,
+through <kbd>↵</kbd> and picks from search, and a gold `↻ looping` says so. While it's on,
+summoning the panel brings back the edit you were looping instead of dealing a new one.
 
 Dismissing pauses the video — an invisible window playing audio over everything else is
 the one thing a panel like this must never do.
@@ -150,8 +155,9 @@ It respects whatever is filtered, so chip `VILLAIN ARC`, hit space, and you get 
 edit. Working through a filtered deck leaves your place in the full one alone.
 
 In the player: <kbd>n</kbd> and <kbd>p</kbd> step through the current results,
-<kbd>s</kbd> stars, <kbd>esc</kbd> closes. Arrow keys stay with the video for seeking.
-An edit that ends rolls into the next one, so a filtered set plays as a queue.
+<kbd>s</kbd> stars, <kbd>l</kbd> (or <kbd>⌘L</kbd>, as in the panel) loops,
+<kbd>esc</kbd> closes. Arrow keys stay with the video for seeking. An edit that ends rolls
+into the next one, so a filtered set plays as a queue — unless you're looping it.
 
 ## Where your stuff lives
 

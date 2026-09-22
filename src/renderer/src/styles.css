@@ -900,6 +900,9 @@ body.is-overlay { background: transparent; }
   letter-spacing: var(--track-mid); text-transform: uppercase; color: var(--dimmer);
 }
 .ov-sub .m { color: var(--accent-hot); }
+/* A mode you set and then forget about is exactly the one that needs saying —
+   otherwise an edit that never moves on reads as the shuffle being broken. */
+.ov-sub .loop { color: var(--gold); }
 .ov-hint {
   margin-top: var(--s2);
   font-family: var(--mono); font-size: var(--fs-2xs);

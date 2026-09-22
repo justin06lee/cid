@@ -19,6 +19,9 @@ export default function App(): JSX.Element {
   } = lib
 
   const [playing, setPlaying] = useState<{ ids: string[]; index: number } | null>(null)
+  // Held here rather than in Player so it outlives closing the player, and so
+  // the keyboard handler below can reach it.
+  const [looping, setLooping] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [queue, setQueue] = useState<IngestProgress[]>([])
   const [ingesting, setIngesting] = useState(0)
@@ -138,6 +141,9 @@ export default function App(): JSX.Element {
         else if (e.key === 'n') { e.preventDefault(); step(1) }
         else if (e.key === 'p') { e.preventDefault(); step(-1) }
         else if (e.key === 's') { e.preventDefault(); void toggleStar(nowPlaying.id, !nowPlaying.starred) }
+        // Bare l, like n/p/s; the key is also 'l' under ⌘, so ⌘L — the panel's
+        // chord — lands here too.
+        else if (e.key.toLowerCase() === 'l') { e.preventDefault(); setLooping((l) => !l) }
         return
       }
 
@@ -349,6 +355,8 @@ export default function App(): JSX.Element {
       {nowPlaying && (
         <Player
           edit={nowPlaying}
+          looping={looping}
+          onToggleLoop={() => setLooping((l) => !l)}
           onClose={() => setPlaying(null)}
           onNext={() => step(1)}
           onPrev={() => step(-1)}

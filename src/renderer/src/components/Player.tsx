@@ -6,6 +6,8 @@ import { fmtDuration } from './EditCard'
 
 interface Props {
   edit: Edit
+  looping: boolean
+  onToggleLoop: () => void
   onClose: () => void
   onNext: () => void
   onPrev: () => void
@@ -16,7 +18,7 @@ interface Props {
 }
 
 export default function Player({
-  edit, onClose, onNext, onPrev, onToggleStar, onRemove, onReveal, onSource
+  edit, looping, onToggleLoop, onClose, onNext, onPrev, onToggleStar, onRemove, onReveal, onSource
 }: Props): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -67,6 +69,9 @@ export default function Player({
         src={`cid://media/${edit.file}`}
         controls
         autoPlay
+        // Looping, the browser restarts it and never fires ended — so the queue
+        // only advances when looping is off.
+        loop={looping}
         onEnded={onNext}
         onError={(e) => setFailed(describeMediaError(e.currentTarget.error))}
       />
@@ -103,6 +108,12 @@ export default function Player({
           </button>
           <button onClick={onPrev}>prev</button>
           <button onClick={onNext}>next</button>
+          {/* One label either way: "looping" is wider than "loop", and swapping
+              them slid prev and next 22px along right after you clicked. The
+              gold on-state (and aria-pressed) says which it is. */}
+          <button className={looping ? 'on' : ''} onClick={onToggleLoop} aria-pressed={looping}>
+            ↻ loop
+          </button>
           {edit.sourceUrl && <button onClick={onSource}>source</button>}
           <button onClick={onReveal}>reveal</button>
           <button
