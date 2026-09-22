@@ -17,6 +17,9 @@ export default function Overlay(): JSX.Element {
   // The panel has no controls of its own, so a file that will not decode leaves
   // nothing on screen at all and no way to tell why.
   const [failed, setFailed] = useState<string | null>(null)
+  // Repeat-one, not a per-edit flag: it stays on through "another" and picks
+  // from search, the way a music player's repeat does. ⌘L, after QuickTime.
+  const [looping, setLooping] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -32,6 +35,8 @@ export default function Overlay(): JSX.Element {
 
   const currentRef = useRef(current)
   currentRef.current = current
+  const loopingRef = useRef(looping)
+  loopingRef.current = looping
 
   // Bumped by every play, so a deal still in flight when something else starts
   // — a pick from search, or the summon and the load effect both rolling —
@@ -80,6 +85,12 @@ export default function Overlay(): JSX.Element {
         // otherwise leave it stale for the rest of the run — and the summon is
         // exactly the moment being wrong is visible.
         void refresh()
+        // Looping means "keep this one": coming back should pick it up where it
+        // was, not deal something new. ↵ is still there for another.
+        if (loopingRef.current && currentRef.current) {
+          void videoRef.current?.play().catch(() => {})
+          return
+        }
         // The library may still be loading on the very first summon; the effect
         // below picks it up as soon as there is something to choose from.
         void roll()
@@ -134,6 +145,14 @@ export default function Overlay(): JSX.Element {
       if (e.key === 'Escape') {
         e.preventDefault()
         void window.cid.hideOverlay()
+        return
+      }
+
+      // Checked before anything that reads the box, so it works mid-search too
+      // — with ⌘ held it is never a character.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        setLooping((l) => !l)
         return
       }
 
@@ -198,6 +217,9 @@ export default function Overlay(): JSX.Element {
             key={current.id}
             src={`cid://media/${current.file}`}
             autoPlay
+            // With loop set the browser restarts it itself and never fires ended,
+            // so the roll below only runs when looping is off.
+            loop={looping}
             onEnded={() => void roll()}
             onPause={() => setPaused(true)}
             onPlay={() => setPaused(false)}
@@ -281,9 +303,11 @@ export default function Overlay(): JSX.Element {
               </span>
             ))}
             <span>{fmtDuration(current.durationSec)}</span>
+            {looping && <span className="loop">↻ looping</span>}
           </div>
           <div className="ov-hint">
-            <kbd>↵</kbd> another · <kbd>space</kbd> pause · <kbd>esc</kbd> hide
+            <kbd>↵</kbd> another · <kbd>space</kbd> pause · <kbd>⌘L</kbd> loop ·{' '}
+            <kbd>esc</kbd> hide
           </div>
         </div>
       )}
