@@ -87,6 +87,18 @@ export default function Overlay(): JSX.Element {
     [roll, setQuery, refresh]
   )
 
+  // The search box has to hold focus for the panel to work at all — every key
+  // is handled there. Two gaps to close: the very first summon is sent before
+  // this page has loaded, so its focus() never runs (hence autoFocus below);
+  // and clicks on the video are window drags now, which never reach the page,
+  // so clicking back into the panel can't hand focus over either. The window
+  // becoming key again can.
+  useEffect(() => {
+    const refocus = (): void => inputRef.current?.focus()
+    window.addEventListener('focus', refocus)
+    return () => window.removeEventListener('focus', refocus)
+  }, [])
+
   useEffect(
     () =>
       window.cid.onOverlayHidden(() => {
@@ -179,8 +191,6 @@ export default function Overlay(): JSX.Element {
 
   return (
     <div className={`ov${searching ? ' searching' : ''}`} onMouseDown={() => inputRef.current?.focus()}>
-      <div className="ov-drag" />
-
       <div className="ov-stage">
         {current ? (
           <video
@@ -218,9 +228,11 @@ export default function Overlay(): JSX.Element {
       </div>
 
       <div className="ov-top">
+        <div className="ov-grip" aria-hidden="true" />
         <input
           ref={inputRef}
           className="ov-search"
+          autoFocus
           value={query}
           spellCheck={false}
           placeholder="type to search"
