@@ -80,7 +80,8 @@ make
 
 That builds cid, installs it to `/Applications`, and launches it. Running `make` again
 is safe. `make update` does the same to an already-running copy: quits it, removes it,
-rebuilds, reinstalls, relaunches. `make dev` runs it from source with hot reload.
+rebuilds, reinstalls, relaunches. `make dev` runs it from source with hot reload, and
+`bun test` runs the tests.
 
 First launch downloads the embedding model once (~25MB, from Hugging Face) and keeps it
 in the app's cache. The inference runtime ships inside the app rather than being fetched
@@ -105,7 +106,8 @@ fullscreen apps included, and starts playing immediately.
 
 Clicking the menu bar icon does the same as the shortcut; right-clicking it opens a menu
 with the library, the add sheet, and quit. An edit that finishes rolls straight into
-another, so leaving it up is a queue.
+another, so leaving it up is a queue — one that plays your whole library before it
+repeats anything (see HIT ME below; it's the same deck).
 
 Dismissing pauses the video — an invisible window playing audio over everything else is
 the one thing a panel like this must never do.
@@ -132,10 +134,15 @@ Then, from the main screen:
 | <kbd>⌘N</kbd> | add an edit |
 | <kbd>esc</kbd> | clear the search and every filter |
 
-HIT ME is not a shuffle. It weights toward edits you starred, away from ones you have
-already worn out, and away from anything you watched in the last few days — so it stops
-handing you the same three every time. It respects whatever is filtered, so chip
-`VILLAIN ARC`, hit space, and you get a villain edit.
+HIT ME deals like a deck, not a die: it works through every edit once before it repeats
+any of them, so nothing sits unwatched while the same few keep coming round. Starred
+edits and ones you just added are dealt earlier in each pass, and the last few you
+watched are held back, so a new pass never opens on the edit the last one ended with.
+Anything you pick by hand counts as dealt. The panel and HIT ME draw from the same deck,
+and it survives quitting.
+
+It respects whatever is filtered, so chip `VILLAIN ARC`, hit space, and you get a villain
+edit. Working through a filtered deck leaves your place in the full one alone.
 
 In the player: <kbd>n</kbd> and <kbd>p</kbd> step through the current results,
 <kbd>s</kbd> stars, <kbd>esc</kbd> closes. Arrow keys stay with the video for seeking.
@@ -147,7 +154,7 @@ An edit that ends rolls into the next one, so a filtered set plays as a queue.
 ~/cid/
   media/         the actual video files
   thumbs/        poster frames
-  library.json   the index — titles, tags, moods, play counts
+  library.json   the index — titles, tags, moods, play counts, where the shuffle is up to
   vectors.json   one embedding per edit
 ```
 
@@ -195,13 +202,15 @@ src/
                ingest, the cid:// protocol
   preload/     the IPC surface exposed to the renderer
   renderer/    React UI, embedding, search ranking
-  shared/      types, mood axes, slang, the vibe-card builder
+  shared/      types, mood axes, slang, the vibe-card builder, the shuffle
+test/          bun tests
 ```
 
 Both windows run the same bundle and pick their face off the URL hash, and both drive
 their own copy of `useLibrary` — the library, its vectors, and a ranked result set. That
 means two copies of a 25MB model in memory, in exchange for a panel that neither knows
-nor cares whether the library window is open.
+nor cares whether the library window is open. The one thing they share is the shuffle:
+main deals every pick, so both windows work through a single deck.
 
 The renderer is served over a custom `cid://` scheme rather than `file://`. That is not
 decoration: onnxruntime boots by wrapping its wasm glue in a Blob and `import()`ing the

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import type { AppInfo, IngestProgress } from '@shared/types'
 import { MOOD_AXES } from '@shared/moods'
 import { useLibrary } from './useLibrary'
-import { hitMe } from './search'
 import EditCard from './components/EditCard'
 import Player from './components/Player'
 import AddSheet from './components/AddSheet'
@@ -62,10 +61,12 @@ export default function App(): JSX.Element {
     [results, markPlayed]
   )
 
-  const roll = useCallback(() => {
-    const pick = hitMe(results)
-    if (!pick) return
-    openAt(results.findIndex((r) => r.edit.id === pick.id))
+  // Dealt by main off the shared shuffle, so HIT ME and the panel work through
+  // one pass of the library together rather than each replaying the other.
+  const roll = useCallback(async () => {
+    const id = await window.cid.deal(results.map((r) => r.edit.id), null)
+    const index = results.findIndex((r) => r.edit.id === id)
+    if (index >= 0) openAt(index)
   }, [results, openAt])
 
   const step = useCallback((delta: number) => {
@@ -147,10 +148,10 @@ export default function App(): JSX.Element {
         searchRef.current?.focus()
       } else if (e.key === 'Enter' && typing) {
         e.preventDefault()
-        roll()
+        void roll()
       } else if (e.key === ' ' && !typing) {
         e.preventDefault()
-        roll()
+        void roll()
       } else if (e.key === 'Escape') {
         setQuery('')
         setActiveMoods([])
@@ -241,7 +242,7 @@ export default function App(): JSX.Element {
               </button>
             )}
           </div>
-          <button className="hitme" onClick={roll} disabled={results.length === 0}>
+          <button className="hitme" onClick={() => void roll()} disabled={results.length === 0}>
             HIT ME
           </button>
         </div>

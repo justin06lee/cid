@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && electron-vite build",
+    "test": "bun test",
     "start": "electron-vite preview",
     "pack": "bun run build && electron-builder --dir",
     "dist": "bun run build && electron-builder"

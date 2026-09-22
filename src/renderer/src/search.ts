@@ -112,31 +112,3 @@ export function rank(
   const floor = Math.max(ABSOLUTE_FLOOR, best * RELATIVE_FLOOR)
   return ranked.filter((r) => r.score >= floor).sort((a, b) => b.score - a.score)
 }
-
-const DAY = 86_400_000
-
-/**
- * Pick one edit at random, but biased toward what you'll actually want:
- * starred edits, ones you haven't worn out, and ones you haven't seen lately.
- * A uniform shuffle keeps handing you the same three you already overplayed.
- */
-export function hitMe(pool: Ranked[]): Edit | null {
-  if (pool.length === 0) return null
-
-  const weights = pool.map(({ edit }) => {
-    const star = edit.starred ? 2.2 : 1
-    const fatigue = 1 / (1 + edit.playCount * 0.35)
-    const rest = edit.lastPlayedAt
-      ? Math.min(1, (Date.now() - edit.lastPlayedAt) / (7 * DAY)) * 0.8 + 0.2
-      : 1
-    return star * fatigue * rest
-  })
-
-  const total = weights.reduce((a, b) => a + b, 0)
-  let roll = Math.random() * total
-  for (let i = 0; i < pool.length; i++) {
-    roll -= weights[i]
-    if (roll <= 0) return pool[i].edit
-  }
-  return pool[pool.length - 1].edit
-}

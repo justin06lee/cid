@@ -14,7 +14,7 @@ import {
 } from './windows.js'
 import {
   loadLibrary, saveNow, allEdits, addEdit, patchEdit, removeEdit,
-  markPlayed, getEdit, unembeddedIds, getVectors, setVector
+  markPlayed, getEdit, unembeddedIds, getVectors, setVector, dealNext
 } from './library.js'
 
 const dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -141,6 +141,9 @@ function registerIpc(): void {
   ipcMain.handle('library:played', (_e, id: string) => {
     markPlayed(id)
   })
+  ipcMain.handle('library:deal', (_e, poolIds: string[], current: string | null) =>
+    dealNext(poolIds, current)
+  )
 
   ipcMain.handle('library:reveal', (_e, id: string) => {
     const edit = getEdit(id)
