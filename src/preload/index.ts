@@ -19,6 +19,9 @@ const api = {
     ipcRenderer.invoke('library:patch', id, patch),
   remove: (id: string): Promise<boolean> => ipcRenderer.invoke('library:remove', id),
   played: (id: string): Promise<void> => ipcRenderer.invoke('library:played', id),
+  /** Deal the next edit from `poolIds` off the shared shuffle — see shared/shuffle.ts. */
+  deal: (poolIds: string[], current: string | null): Promise<string | null> =>
+    ipcRenderer.invoke('library:deal', poolIds, current),
   reveal: (id: string): Promise<void> => ipcRenderer.invoke('library:reveal', id),
   openSource: (id: string): Promise<void> => ipcRenderer.invoke('library:openSource', id),
   openFolder: (): Promise<void> => ipcRenderer.invoke('library:openFolder'),

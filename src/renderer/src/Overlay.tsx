@@ -3,7 +3,6 @@ import type { Edit } from '@shared/types'
 import { MOOD_BY_KEY } from '@shared/moods'
 import { useLibrary } from './useLibrary'
 import { describeMediaError } from './mediaError'
-import { hitMe } from './search'
 import { fmtDuration } from './components/EditCard'
 
 const NO_FILTERS = { activeMoods: [] as string[], starredOnly: false }
@@ -31,9 +30,25 @@ export default function Overlay(): JSX.Element {
   const resultsRef = useRef(results)
   resultsRef.current = results
 
+  const currentRef = useRef(current)
+  currentRef.current = current
+
+  // Bumped by every play, so a deal still in flight when something else starts
+  // — a pick from search, or the summon and the load effect both rolling —
+  // lands nowhere instead of yanking the edit out from under it.
+  const playSeq = useRef(0)
+
   const play = useCallback(
     (edit: Edit | null) => {
       if (!edit) return
+      playSeq.current++
+      // <video> is keyed on the id, so the same edit again would not restart.
+      // Only a one-edit library deals that, and there "another" should at least
+      // start it over.
+      if (edit.id === currentRef.current?.id && videoRef.current) {
+        videoRef.current.currentTime = 0
+        void videoRef.current.play().catch(() => {})
+      }
       setCurrent(edit)
       setPaused(false)
       setFailed(null)
@@ -42,20 +57,15 @@ export default function Overlay(): JSX.Element {
     [markPlayed]
   )
 
-  const roll = useCallback(() => {
-    setCurrent((now) => {
-      const pool = resultsRef.current
-      // Exclude whatever is playing, or "another" can hand back the same edit —
-      // and since <video> is keyed on the id, it would not even restart.
-      const fresh = now && pool.length > 1 ? pool.filter((r) => r.edit.id !== now.id) : pool
-      const pick = hitMe(fresh)
-      if (!pick) return now
-      markPlayed(pick.id)
-      setPaused(false)
-      setFailed(null)
-      return pick
-    })
-  }, [markPlayed])
+  // Main deals off the shuffle bag both windows share. It never hands back the
+  // current edit while anything else is left, so "another" is always another.
+  const roll = useCallback(async () => {
+    const seq = playSeq.current
+    const pool = resultsRef.current
+    const id = await window.cid.deal(pool.map((r) => r.edit.id), currentRef.current?.id ?? null)
+    if (seq !== playSeq.current) return
+    play(pool.find((r) => r.edit.id === id)?.edit ?? null)
+  }, [play])
 
   /* ── summon / dismiss ────────────────────────────────────────────────── */
 
@@ -72,7 +82,7 @@ export default function Overlay(): JSX.Element {
         void refresh()
         // The library may still be loading on the very first summon; the effect
         // below picks it up as soon as there is something to choose from.
-        roll()
+        void roll()
       }),
     [roll, setQuery, refresh]
   )
@@ -102,7 +112,7 @@ export default function Overlay(): JSX.Element {
   // First summon usually beats the library load, leaving an empty panel. As soon
   // as edits exist and nothing is playing, start something.
   useEffect(() => {
-    if (!current && edits.length > 0) roll()
+    if (!current && edits.length > 0) void roll()
   }, [current, edits.length, roll])
 
   /* ── keyboard ────────────────────────────────────────────────────────── */
@@ -126,7 +136,7 @@ export default function Overlay(): JSX.Element {
           }
         } else {
           // Nothing typed: Enter means "not this one, give me another".
-          roll()
+          void roll()
         }
         return
       }
@@ -178,7 +188,7 @@ export default function Overlay(): JSX.Element {
             key={current.id}
             src={`cid://media/${current.file}`}
             autoPlay
-            onEnded={roll}
+            onEnded={() => void roll()}
             onPause={() => setPaused(true)}
             onPlay={() => setPaused(false)}
             onError={(e) => setFailed(describeMediaError(e.currentTarget.error))}

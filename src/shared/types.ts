@@ -37,6 +37,11 @@ export interface Edit {
 export interface Library {
   version: 1
   edits: Edit[]
+  /**
+   * ids played since the shuffle's current pass began — see shared/shuffle.ts.
+   * Optional so a library.json written before the shuffle bag still loads.
+   */
+  seenThisPass?: string[]
 }
 
 /** Progress pushed from main during a yt-dlp ingest. */
